@@ -10,8 +10,9 @@ Coisas importantes:
 	// para executar: prodcons_n_thread_sem
 
 2) Como usar o GitHub:
+
 	a) Crie sua conta no GitHub: https://github.com/
-	
+
 	b) Após criar a conta, siga os passos:
 		b1) https://help.github.com/articles/set-up-git/
 		b2) Siga os passos 2 e 3 em https://help.github.com/articles/fork-a-repo/
