@@ -102,7 +102,7 @@ void *consumer(void) {
 
 int main(void) {
 	pthread_t prod_handle[N], cons_handle[N];
-	int i;
+
 	/* declarations and initializations */
 	item_available = 0;
 
@@ -112,7 +112,7 @@ int main(void) {
 	sem_init (&mutex_produtor, 0 , 1);
 
 	/* create and join producer and consumer threads */
-	for(i = 0; i < N; i++) {
+	for(int i = 0; i < N; i++) {
 		if (pthread_create(&prod_handle[i], 0, (void *) producer, (void *) 0) != 0) { 
 			printf("Error creating thread producer! Exiting! \n");
 			exit(0);
@@ -126,7 +126,7 @@ int main(void) {
 	printf("\n Thread pai vai esperar filhas.\n\n");
 	fflush(0);
 
-	for(i = 0; i < N; i++) {
+	for(int i = 0; i < N; i++) {
 		pthread_join(prod_handle[i], 0);
 		pthread_join(cons_handle[i], 0);
 	}
