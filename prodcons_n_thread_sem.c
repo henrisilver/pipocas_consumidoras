@@ -10,7 +10,7 @@
 #define MAX_QUEUE 5
 #define N 3
 
-sem_t mutex_critico, empty, full, mutex_produtor;
+sem_t mutex_critico, empty, full, mutex_produtor, mutex_consumidor;
 
 int queue[MAX_QUEUE], item_available=0, produced=0, consumed=0;
 
@@ -25,7 +25,7 @@ void insert_into_queue(int item) {
 	
 	queue[item_available++] = item;
 	produced++;
-	printf("producing item:%d, value:%d, queued:%d \n", produced, item, item_available); 
+	printf("producing item:%d", produced); //value:%d, queued:%d \n", produced, item, item_available); 
 	return;
 
 } // fim insert_into_queue()
@@ -33,17 +33,16 @@ void insert_into_queue(int item) {
 int extract_from_queue() {
 
 	consumed++;
-	printf("cosuming item:%d, value:%d, queued:%d \n", consumed, queue[item_available-1], item_available-1); 
+	printf("consuming item:%d", consumed); //value:%d, queued:%d \n", consumed, queue[item_available-1], item_available-1); 
 	
 	return(queue[--item_available]);
 
 } // fim extract_from_queue()
 
 void process_item(int my_item) {
-	static int printed=0;
+	//static int printed=0;
 
-	printf("Printed:%d, value:%d, queued:%d \n", printed++, my_item, item_available);
-
+	//printf("Printed:%d, value:%d, queued:%d \n", printed++, my_item, item_available);
 	return;
 
 } // fim_process_item()
@@ -84,19 +83,28 @@ void *producer(void) {
 void *consumer(void) {
 	int my_item = 0;
 
-	while (consumed < MAX_PRODUCED) {
-		sem_wait(&full);
-		sem_wait(&mutex_critico);
-		my_item = extract_from_queue();
-		sem_post(&mutex_critico);
-		sem_post(&empty);
-		process_item(my_item);
+	while (1) {
+		sem_wait(&mutex_consumidor);
+
+		if(consumed < MAX_PRODUCED) {
+			sem_wait(&full);
+			sem_wait(&mutex_critico);
+			my_item = extract_from_queue();
+			sem_post(&mutex_critico);
+			sem_post(&empty);
+			//process_item(my_item);
+			sem_post(&mutex_consumidor);
+		}
+		else {
+			sem_post(&mutex_consumidor);
+			printf("\nThread consumer saindo.\n\n");
+			fflush(0);
+	
+			pthread_exit(0);
+		}
 	}
 
-	printf("\nThread consumer saindo.\n\n");
-	fflush(0);
 	
-	pthread_exit(0);
 } // fim_consumer
 
 
@@ -110,6 +118,7 @@ int main(void) {
 	sem_init(&empty, 0, MAX_QUEUE);
 	sem_init(&full, 0, 0);
 	sem_init (&mutex_produtor, 0 , 1);
+	sem_init (&mutex_consumidor, 0 , 1);
 
 	/* create and join producer and consumer threads */
 	for(i = 0; i < N; i++) {
