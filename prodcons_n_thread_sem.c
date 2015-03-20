@@ -1,3 +1,4 @@
+//
 // Algoritmo Produtor/Consumidor com N produtores e N consumidores
 // ***************************************************************
 // Grupo:
@@ -18,135 +19,143 @@
 // ja que um produtor/consumidor que ja esta executando o laco while original
 // pode sofrer preempcao e nao alterar as variaveis produced/consumed
 // (respectivamente), o que pode permirtir que outra thread passe no teste
-// do while mesmo que isso seja errado. Por isso, as checagens dos whiles
-// sao feitas em ifs separados, enquanto os lacos while tem como argumento
-// o numero 1 para sempre executarem. A checagem dos ifs eh envolvida
-// pelos semaforos citados. Dessa forma, asseguramos que apenas um produtor
-// ou apenas um consumidor estejam "acordados" por vez
+// do while mesmo que isso seja errado. Assim, os mutex_produced e mutex_consumed
+// sao utilizados para que a checagem das variaveis produced e consumed,
+// respectivamente, seja feita com exclusao mutua. Isso faz com que o valor
+// dessas variaveis esteja sempre atualizado quando uma thread verificar as
+// condicoes do while.
 
 // para compilar: gcc prodcons_n_thread_sem.c -o prodcons_n_thread_sem -pthread
 // para executar: prodcons_n_thread_sem
 //
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <pthread.h>
 #include <semaphore.h>
-#define MAX_PRODUCED 3157
-#define MAX_QUEUE 527
-#define N 113
 
-// mutex_critico eh o mutex originalmente usado, enquanto
-// mutex_produtor e mutex_consumidor foram adicionados
-sem_t mutex_critico, empty, full, mutex_produtor, mutex_consumidor;
+#define N 19
+#define MAX_PRODUCED 3907
+#define MAX_QUEUE 149
+
+sem_t  mutex, empty, full, mutex_produced, mutex_consumed;
 
 int queue[MAX_QUEUE], item_available=0, produced=0, consumed=0;
 
+
 int create_item(void) {
-	
+
 	return(rand()%1000);
-} //fim create_item()
+
+} //fim  create_item()
 
 void insert_into_queue(int item) {
 	
 	queue[item_available++] = item;
-	produced++;
-	printf("producing item:%d, value:%d, queued:%d \n", produced, item, item_available);
+	// produced++ acontece agora na funcao producer, já que as threads concorrem por essa
+	// variavel. Dessa forma, a checagem produced < MAX_PRODUCED sempre tera o valor produced
+	// atualizado
+	printf("producing item:%d, value:%d, queued:%d \n", produced, item, item_available); 
 	return;
-} 
-// fim insert_into_queue()
+
+} // fim insert_into_queue()
+
 int extract_from_queue() {
-	consumed++;
-	printf("consuming item:%d, value:%d, queued:%d \n", consumed, queue[item_available-1], item_available-1);
+
+	// consumed++ acontece agora na funcao consumer, já que as threads concorrem por essa
+	// variavel. Dessa forma, a checagem consumed < MAX_PRODUCED sempre tera o valor consumed
+	// atualizado
+	printf("cosuming item:%d, value:%d, queued:%d \n", consumed, queue[item_available-1], item_available-1); 
+	
 	return(queue[--item_available]);
+
 } // fim extract_from_queue()
 
 void process_item(int my_item) {
-	
 	static int printed=0;
+
 	printf("Printed:%d, value:%d, queued:%d \n", printed++, my_item, item_available);
+
 	return;
+
 } // fim_process_item()
+
 
 void *producer(void) {
 	int item;
-	
-	while (1) {
-		// mutex auxiliar que permite que apenas um produtor esteja
-		// "acordado" por vez
-		sem_wait(&mutex_produtor);
-		
-		// Condicao de checagem é movida para um if envolvido por um novo
-		// semaforo para evitar que um novo item seja produzido em excesso
-		// (caso haja uma preempcao de uma thread produtora e a nova thread
-		// seja outra produtora, no momento em que o limite de itens foi
-		// atingido)
-		if(produced < MAX_PRODUCED) {
-			sem_wait(&empty);
-			sem_wait(&mutex_critico);
-			item = create_item(); // Producao de item envolvida por semaforos para
-								  // evitar que o numero maximo de itens
-								  // produzidos seja superado
-			insert_into_queue(item);
-			sem_post(&mutex_critico);
-			sem_post(&full);
-			sem_post(&mutex_produtor);
-		}
-		else {
-			sem_post(&mutex_produtor);
-			printf("\nThread producer saindo.\n\n");
-			fflush(0);
-			pthread_exit(0);
-		}
+
+	// Semaforo eh utilizado aqui para a checagem da primeira iteracao do laco while
+	sem_wait(&mutex_produced);
+	while (produced < MAX_PRODUCED ) {
+	  // Se a checagem acima resultar for verdadeira, um novo item sera produzido e assim
+	  // produced deve ser incrementada; isso acontece com exclusao mutua para que a
+	  // produced seja sempre lida com o valor atualizado (quando uma thread estiver
+	  // dentro do laco e for produzir um item, outra thread nao entre no laco tambem caso
+	  // a primeira sofra preempcao antes de produzir o item e o numero maximo de itens
+	  // produzidos estiver prestes a ser ultrapassado)
+	  produced++;
+	  // Semaforo liberado pois produced ja foi alterada
+	  sem_post(&mutex_produced);
+	  item = create_item();
+	  sem_wait(&empty);
+	  sem_wait(&mutex);
+	  insert_into_queue(item);
+	  sem_post(&mutex);
+	  sem_post(&full);
+	  // Exclusao mutua na checagem e modificacao de produced comeca abaixo: o semaforo
+	  // eh usado para que apenas uma thread por vez leia e possivelmente altere a
+	  // variavel produced
+	  sem_wait(&mutex_produced);
 	}
+
+	// Liberacao do semaforo
+	sem_post(&mutex_produced);
+	printf("\nThread producer saindo.\n\n");
+	fflush(0);
+
+	pthread_exit(0);
 } // fim producer
 
 void *consumer(void) {
 	int my_item = 0;
-	
-	while (1) {
-		// O mesmo ocorre com o consumidor: o mutex_consumidor eh
-		// utilizado para assegurar que apenas um consumidor seja
-		// executado por vez
-		sem_wait(&mutex_consumidor);
 
-		// Condicao de checagem é movida para um if envolvido por um novo
-		// semaforo para evitar que um item inexistente seja consumido, o
-		// que causaria que o consumidor "dormisse" para sempre
-		// (caso haja uma preempcao de uma thread consumidora e a nova thread
-		// seja outra consumidora, e caso so existir um item restante, a thread
-		// que sofreu preempcao dormiria para sempre)
-		if(consumed < MAX_PRODUCED) {
-			sem_wait(&full);
-			sem_wait(&mutex_critico);
-			my_item = extract_from_queue();
-			sem_post(&mutex_critico);
-			sem_post(&empty);
-			process_item(my_item);
-			sem_post(&mutex_consumidor);
-		}
-		else {
-			sem_post(&mutex_consumidor);
-			printf("\nThread consumer saindo.\n\n");
-			fflush(0);
-			pthread_exit(0);
-		}
+	// Algo analogo ao caso do produtor acontece para o consumidor:
+	// consumed eh uma variavel concorrida pelas threads consumidoras e deve
+	// haver exclusao mutua na sua checagem e possivel alteracao de valor (caso
+	// a condicao do loop while seja verdadeira)
+	sem_wait(&mutex_consumed);
+	while (consumed < MAX_PRODUCED) {
+	  consumed++;
+	  sem_post(&mutex_consumed);
+	  sem_wait(&full);
+	  sem_wait(&mutex);
+	  my_item = extract_from_queue();
+	  sem_post(&mutex);
+	  sem_post(&empty);
+	  process_item(my_item);
+	  sem_wait(&mutex_consumed);
 	}
+
+	// Liberacao do semaforo
+	sem_post(&mutex_consumed);
+	printf("\nThread consumer saindo.\n\n");
+	fflush(0);
+	
+	pthread_exit(0);
 } // fim_consumer
 
-int main(void) {
 
+int main(void) {
 	// Vetores para threads dos produtores e consumidores
 	pthread_t prod_handle[N], cons_handle[N];
 	int i;
 
 	/* declarations and initializations */
 	item_available = 0;
-	sem_init (&mutex_critico, 0 , 1);
+	sem_init (&mutex, 0 , 1);
 	sem_init(&empty, 0, MAX_QUEUE);
 	sem_init(&full, 0, 0);
-	sem_init (&mutex_produtor, 0 , 1);
-	sem_init (&mutex_consumidor, 0 , 1);
+	sem_init (&mutex_produced, 0 , 1);
+	sem_init (&mutex_consumed, 0 , 1);
 	
 	/* create and join producer and consumer threads */
 	for(i = 0; i < N; i++) {
