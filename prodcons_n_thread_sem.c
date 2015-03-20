@@ -23,7 +23,8 @@
 // sao utilizados para que a checagem das variaveis produced e consumed,
 // respectivamente, seja feita com exclusao mutua. Isso faz com que o valor
 // dessas variaveis esteja sempre atualizado quando uma thread verificar as
-// condicoes do while.
+// condicoes do while. Apos feita a checagem, os semaforos sao liberados e outras
+// threads consumidor/produtor podem executar ao mesmo tempo
 
 // para compilar: gcc prodcons_n_thread_sem.c -o prodcons_n_thread_sem -pthread
 // para executar: prodcons_n_thread_sem
@@ -93,7 +94,9 @@ void *producer(void) {
 	  // a primeira sofra preempcao antes de produzir o item e o numero maximo de itens
 	  // produzidos estiver prestes a ser ultrapassado)
 	  produced++;
-	  // Semaforo liberado pois produced ja foi alterada
+	  // Semaforo liberado pois produced ja foi alterada. Com essa abordagem, multiplos
+	  // threads de consumidores podem executar esta funcao ao mesmo tempo, executando
+	  // partes diferentes do codigo
 	  sem_post(&mutex_produced);
 	  item = create_item();
 	  sem_wait(&empty);
